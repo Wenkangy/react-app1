@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useDebounce } from 'react-use';
 import Search from './components/Search.jsx';
 import Spinner from './components/spinner.jsx';
+import MovieCard from './components/movieCard.jsx';
+import { updateSearchCount } from './appwrite.js';
 
 const API_URL = 'https://api.themoviedb.org/3';
 
-const API_KEY = `eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI0MTlhZjI0NTRlMDAzOWI5ZWU4ZTJjMDUzZjBkMTVmZCIsIm5iZiI6MTc1Nzg5MzIyOS42MDQsInN1YiI6IjY4Yzc1MjZkYjlmOWUyNDM5ZmUzMDAzYyIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.DBkff_M8W1V2AopAttkjq0brATKwmC8TPYt11WanVqo`;
+const API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 
 const API_OPTIONS = {
   method: 'GET',
@@ -19,12 +22,23 @@ const App = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [movieList, setMovieList] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [debounceSearhTerm, setDebounceSeaRchTerm] = useState('');
 
-  const fetchMovies = async () => {
+  useDebounce(
+    () => {
+      setDebounceSeaRchTerm(searchTerm);
+    },
+    500,
+    [searchTerm]
+  );
+
+  const fetchMovies = async (query = '') => {
     setIsLoading(true);
     setErrorMessage('');
     try {
-      const endpoint = `${API_URL}/discover/movie?sort_by=popularity.desc`;
+      const endpoint = query
+        ? `${API_URL}/search/movie?query=${encodeURIComponent(query)}`
+        : `${API_URL}/discover/movie?sort_by=popularity.desc`;
       const response = await fetch(endpoint, API_OPTIONS);
 
       if (!response.ok) {
@@ -39,6 +53,10 @@ const App = () => {
         return;
       }
       setMovieList(data.results || []);
+
+      if (query && data.results.length > 0) {
+        updateSearchCount(query, data.results[0]);
+      }
     } catch (error) {
       console.error('Error fetching movies:', error);
       setErrorMesaage('Failed to fetch movies. Please try again later.');
@@ -48,8 +66,8 @@ const App = () => {
   };
 
   useEffect(() => {
-    fetchMovies();
-  }, []);
+    fetchMovies(debounceSearhTerm);
+  }, [debounceSearhTerm]);
 
   return (
     <main>
@@ -71,8 +89,8 @@ const App = () => {
             setSearchTerm={setSearchTerm}
           />
         </header>
-        <section>
-          <h2>all movies</h2>
+        <section className='all-movies'>
+          <h2 className='mt-4'>all movies</h2>
 
           {isLoading ? (
             <Spinner />
@@ -81,12 +99,10 @@ const App = () => {
           ) : (
             <ul>
               {movieList.map((movie) => (
-                <p
+                <MovieCard
                   key={movie.id}
-                  className='text-white'
-                >
-                  {movie.title}
-                </p>
+                  movie={movie}
+                />
               ))}
             </ul>
           )}
